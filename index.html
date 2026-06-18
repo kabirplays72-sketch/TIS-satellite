@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>SkyNode Ground Station</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="stylesheet" href="styles.css"/>
+</head>
+<body>
+<div class="app">
+
+<!-- HEADER -->
+<header class="hdr">
+  <div class="brand">
+    <div class="brand-name">Sky<em>Node</em></div>
+    <div class="brand-sub">Ground Station</div>
+  </div>
+
+  <div class="sensor-bar">
+    <div class="sensor-led" id="led-imu"><div class="led"></div>MPU6050</div>
+    <div class="sensor-sep"></div>
+    <div class="sensor-led" id="led-temp"><div class="led"></div>BMP-T</div>
+    <div class="sensor-sep"></div>
+    <div class="sensor-led" id="led-pres"><div class="led"></div>BMP-P</div>
+    <div class="sensor-sep"></div>
+    <div class="sensor-led" id="led-alt"><div class="led"></div>BMP-A</div>
+    <div class="sensor-sep"></div>
+    <div class="sensor-led" id="led-gps"><div class="led"></div>NEO-6M</div>
+    <div class="sensor-sep"></div>
+    <div class="sensor-led" id="led-hdg"><div class="led"></div>GYRO-Z</div>
+  </div>
+
+  <div class="hdr-space"></div>
+
+  <div class="hdr-conn">
+    <button class="hbtn" id="btn-serial" onclick="connectSerial()"><span class="sig"></span>USB Serial</button>
+    <button class="hbtn" id="btn-wifi"   onclick="connectWiFi()"><span class="sig"></span>Wi-Fi</button>
+    <button class="hbtn" id="btn-ble"    onclick="connectBLE()"><span class="sig"></span>BLE</button>
+    <button class="hbtn" id="btn-demo"   onclick="startDemo()">&#9654; Demo</button>
+  </div>
+
+  <div class="hdr-right">
+    <div id="sbadge">Disconnected</div>
+    <button id="thm" onclick="toggleTheme()" title="Toggle theme">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <circle cx="7" cy="7" r="3" fill="currentColor"/>
+        <line x1="7" y1="1" x2="7" y2="2.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+        <line x1="7" y1="11.5" x2="7" y2="13" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+        <line x1="1" y1="7" x2="2.5" y2="7" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+        <line x1="11.5" y1="7" x2="13" y2="7" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+        <line x1="2.9" y1="2.9" x2="3.9" y2="3.9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+        <line x1="10.1" y1="10.1" x2="11.1" y2="11.1" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+        <line x1="11.1" y1="2.9" x2="10.1" y2="3.9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+        <line x1="3.9" y1="10.1" x2="2.9" y2="11.1" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+      </svg>
+    </button>
+  </div>
+</header>
+
+<!-- MAIN BODY: 3 columns -->
+<div class="body">
+
+  <!-- COL B: 3D (top, shorter) + GPS map (bottom) -->
+  <div class="col-b">
+
+    <div class="card" id="card-webcam">
+      <div class="card-hd">
+        <span class="clabel">Camera Feed</span>
+        <div style="display:flex;gap:4px;">
+          <button class="tbtn" id="btn-cam" onclick="toggleWebcam()">&#9654; Start</button>
+          <button class="tbtn" id="btn-cam-snap" onclick="snapPhoto()" style="display:none;">Snap</button>
+        </div>
+      </div>
+      <div class="webcam-wrap">
+        <video id="webcam-video" autoplay playsinline muted style="display:none;"></video>
+        <canvas id="webcam-snap" style="display:none;"></canvas>
+        <div class="webcam-placeholder" id="webcam-placeholder">
+          <div style="text-align:center;padding:12px;">
+            <div style="font-size:2.2rem;margin-bottom:8px;opacity:.2;">&#128247;</div>
+            <div style="font-size:.72rem;color:var(--muted);font-weight:600;letter-spacing:.04em;">Click Start to enable camera</div>
+          </div>
+        </div>
+      </div>
+      <div id="webcam-status" style="font-size:.62rem;color:var(--muted);font-weight:600;text-align:center;flex-shrink:0;padding-top:2px;min-height:14px;"></div>
+    </div>
+
+    <!-- Stats + Log below webcam -->
+    <div class="card" id="card-stats">
+      <div class="card-hd" style="flex-shrink:0;">
+        <span class="clabel">Session Stats</span>
+        <button class="tbtn" onclick="resetStats()">Reset</button>
+      </div>
+      <div class="stat-grid">
+        <div class="stat"><div class="sl">Max Temp</div><div class="sv" id="st-mxt" style="color:var(--red)">—</div></div>
+        <div class="stat"><div class="sl">Min Temp</div><div class="sv" id="st-mit" style="color:var(--accent)">—</div></div>
+        <div class="stat"><div class="sl">Max Alt</div><div class="sv" id="st-mxa" style="color:var(--green)">—</div></div>
+        <div class="stat"><div class="sl">Min Alt</div><div class="sv" id="st-mia" style="color:var(--muted)">—</div></div>
+        <div class="stat"><div class="sl">Max Roll</div><div class="sv" id="st-mxr" style="color:var(--accent)">—</div></div>
+        <div class="stat"><div class="sl">Max Pitch</div><div class="sv" id="st-mxp" style="color:var(--green)">—</div></div>
+        <div class="stat"><div class="sl">Packets</div><div class="sv" id="st-pkt" style="color:var(--muted)">0</div></div>
+        <div class="stat"><div class="sl">Max Pres</div><div class="sv" id="st-mxpr" style="color:var(--accent)">—</div></div>
+      </div>
+      <div class="sig-row"><span class="sl">Packet Age</span><span class="sv" id="st-age" style="color:var(--muted)">—</span></div>
+      <div class="sig-row"><span class="sl">Data Rate</span><span class="sv" id="st-rate" style="color:var(--muted)">— pkt/s</span></div>
+      <div class="card-hd" style="flex-shrink:0;margin-top:2px;">
+        <span class="clabel">Telemetry Log</span>
+        <button class="tbtn" onclick="clearLog()">Clear</button>
+      </div>
+      <div class="log-wrap">
+        <div class="log" id="tlog"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- COL A: Webcam (top) + Stats+Log (bottom) -->
+  <div class="col-a">
+
+    <div class="card" id="card-3d">
+      <div class="card-hd">
+        <span class="clabel">SkyNode 1U</span>
+        <button class="tbtn" onclick="zeroYaw()">Zero Yaw</button>
+      </div>
+      <div id="csat">
+        <div class="orb">
+          <div class="ob">R <span id="ob-r">0.0</span></div>
+          <div class="ob">P <span id="ob-p">0.0</span></div>
+          <div class="ob">Y <span id="ob-y">0.0</span></div>
+        </div>
+      </div>
+      <div class="imu-row">
+        <div class="iv roll"><div class="il">Roll</div><div class="iv-val" id="vr">—</div></div>
+        <div class="iv pitch"><div class="il">Pitch</div><div class="iv-val" id="vp">—</div></div>
+        <div class="iv yaw"><div class="il">Yaw</div><div class="iv-val" id="vy">—</div></div>
+      </div>
+    </div>
+
+    <!-- GPS Map below webcam -->
+    <div class="card" id="card-map">
+      <div class="card-hd">
+        <span class="clabel">GPS Track · NEO-6M</span>
+        <div style="display:flex;gap:4px;">
+          <span class="coord-badge"><span class="coord-lbl">LAT</span><span id="gps-lat">—</span></span>
+          <span class="coord-badge"><span class="coord-lbl">LON</span><span id="gps-lon">—</span></span>
+        </div>
+      </div>
+      <div id="map"></div>
+    </div>
+
+  </div>
+
+  <!-- COL C: Sensors (top 4 gauges) + Compass -->
+  <div class="col-c">
+
+    <!-- 4 sensor gauges stacked -->
+    <div class="card sensor-card">
+      <div class="card-hd"><span class="clabel">Temperature</span></div>
+      <div class="gauge gauge-big" data-k="temp">
+        <div class="gval-row"><span class="gv" id="g-temp">—</span><span class="gu">°C</span></div>
+        <div class="gmm"><span>Min <b class="mn" id="mn-temp">—</b></span><span>Max <b class="mx" id="mx-temp">—</b></span></div>
+        <div class="gbar"><div class="gbf" id="bar-temp" style="width:0%"></div></div>
+      </div>
+    </div>
+
+    <div class="card sensor-card">
+      <div class="card-hd">
+        <span class="clabel">Altitude</span>
+        <button class="tbtn" onclick="calibrateAltitude()">Zero</button>
+      </div>
+      <div class="gauge gauge-big" data-k="alt">
+        <div class="gval-row"><span class="gv" id="g-alt">—</span><span class="gu">m</span></div>
+        <div class="gmm"><span>Min <b class="mn" id="mn-alt">—</b></span><span>Max <b class="mx" id="mx-alt">—</b></span></div>
+        <div class="gbar"><div class="gbf" id="bar-alt" style="width:0%"></div></div>
+      </div>
+    </div>
+
+    <div class="card sensor-card">
+      <div class="card-hd"><span class="clabel">Pressure</span></div>
+      <div class="gauge gauge-big" data-k="pres">
+        <div class="gval-row"><span class="gv" id="g-press">—</span><span class="gu">hPa</span></div>
+        <div class="gmm"><span>Min <b class="mn" id="mn-press">—</b></span><span>Max <b class="mx" id="mx-press">—</b></span></div>
+        <div class="gbar"><div class="gbf" id="bar-press" style="width:50%"></div></div>
+      </div>
+    </div>
+
+    <div class="card sensor-card">
+      <div class="card-hd"><span class="clabel">Roll · Pitch · Yaw</span></div>
+      <div class="imu-big-grid">
+        <div class="imu-big roll"><div class="ibl">Roll</div><div class="ibv" id="vr2">—</div></div>
+        <div class="imu-big pitch"><div class="ibl">Pitch</div><div class="ibv" id="vp2">—</div></div>
+        <div class="imu-big yaw"><div class="ibl">Yaw</div><div class="ibv" id="vy2">—</div></div>
+      </div>
+    </div>
+
+    <!-- Compass at bottom of col C -->
+    <div class="card" id="card-compass">
+      <div class="card-hd">
+        <span class="clabel">Heading · Gyro-Z</span>
+        <button class="tbtn" onclick="resetCompass()">Zero</button>
+      </div>
+      <div class="compass-wrap">
+        <div style="text-align:center;flex-shrink:0;margin-bottom:4px;">
+          <span id="cdeg-svg" style="font-size:1.4rem;font-weight:900;font-variant-numeric:tabular-nums;color:var(--text);">0°</span>
+          <span style="margin:0 4px;color:var(--border);">·</span>
+          <span id="cdir-svg" style="font-size:.95rem;font-weight:800;color:var(--accent);">N</span>
+        </div>
+        <svg id="compass-svg" viewBox="0 0 200 200"
+             style="width:100%;height:calc(100% - 36px);max-width:180px;max-height:180px;display:block;margin:auto;overflow:hidden;">
+          <defs>
+            <clipPath id="dial-clip"><circle cx="100" cy="100" r="84"/></clipPath>
+          </defs>
+          <circle cx="100" cy="100" r="93" stroke="var(--border)" stroke-width="1.5" fill="none"/>
+          <circle cx="100" cy="100" r="86" fill="var(--surface2)" fill-opacity=".5" stroke="var(--border)" stroke-width=".5"/>
+          <g id="dial-ticks"></g>
+          <line x1="100" y1="14"  x2="100" y2="30"  stroke="var(--red)"   stroke-width="3"/>
+          <line x1="100" y1="170" x2="100" y2="186"  stroke="var(--muted)" stroke-width="2"/>
+          <line x1="14"  y1="100" x2="30"  y2="100"  stroke="var(--muted)" stroke-width="2"/>
+          <line x1="170" y1="100" x2="186" y2="100"  stroke="var(--muted)" stroke-width="2"/>
+          <line x1="161" y1="39"  x2="150" y2="50"  stroke="var(--muted)" stroke-width="1.5"/>
+          <line x1="39"  y1="39"  x2="50"  y2="50"  stroke="var(--muted)" stroke-width="1.5"/>
+          <line x1="161" y1="161" x2="150" y2="150"  stroke="var(--muted)" stroke-width="1.5"/>
+          <line x1="39"  y1="161" x2="50"  y2="150"  stroke="var(--muted)" stroke-width="1.5"/>
+          <text x="100" y="48"  text-anchor="middle" dominant-baseline="middle" font-size="13" font-weight="900" fill="var(--red)"   font-family="Inter,system-ui,sans-serif">N</text>
+          <text x="100" y="156" text-anchor="middle" dominant-baseline="middle" font-size="12" font-weight="800" fill="var(--muted)" font-family="Inter,system-ui,sans-serif">S</text>
+          <text x="44"  y="100" text-anchor="middle" dominant-baseline="middle" font-size="12" font-weight="800" fill="var(--muted)" font-family="Inter,system-ui,sans-serif">W</text>
+          <text x="156" y="100" text-anchor="middle" dominant-baseline="middle" font-size="12" font-weight="800" fill="var(--muted)" font-family="Inter,system-ui,sans-serif">E</text>
+          <text x="150" y="56"  text-anchor="middle" dominant-baseline="middle" font-size="9" font-weight="700" fill="var(--muted)" font-family="Inter,system-ui,sans-serif">NE</text>
+          <text x="50"  y="56"  text-anchor="middle" dominant-baseline="middle" font-size="9" font-weight="700" fill="var(--muted)" font-family="Inter,system-ui,sans-serif">NW</text>
+          <text x="150" y="148" text-anchor="middle" dominant-baseline="middle" font-size="9" font-weight="700" fill="var(--muted)" font-family="Inter,system-ui,sans-serif">SE</text>
+          <text x="50"  y="148" text-anchor="middle" dominant-baseline="middle" font-size="9" font-weight="700" fill="var(--muted)" font-family="Inter,system-ui,sans-serif">SW</text>
+          <g id="comp-needle" clip-path="url(#dial-clip)" style="transform-box:fill-box;transform-origin:center;">
+            <polygon points="100,22 105,100 100,90 95,100" fill="var(--red)" opacity=".95"/>
+            <polygon points="100,178 105,100 100,110 95,100" fill="var(--muted)" opacity=".55"/>
+          </g>
+          <circle cx="100" cy="100" r="7" fill="var(--surface)" stroke="var(--accent)" stroke-width="1.5"/>
+          <circle cx="100" cy="100" r="3" fill="var(--accent)"/>
+        </svg>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+</div>
+
+<!-- Hidden GO/NO-GO elements -->
+<div class="gng-hidden">
+  <span id="gng-imu"></span><span id="gng-temp"></span><span id="gng-pres"></span>
+  <span id="gng-alt"></span><span id="gng-gps"></span><span id="gng-hdg"></span>
+  <span id="gng-all"></span>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
